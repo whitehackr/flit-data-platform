@@ -167,7 +167,7 @@ git clone https://github.com/whitehackr/flit-data-platform.git
 cd flit-data-platform
 
 # Create all folders at once (Mac/Linux)
-mkdir -p models/{staging,intermediate,marts/{core,experiments,ml}} scripts tests macros docs data/{synthetic,schemas}
+mkdir -p models/{staging,intermediate,marts/{core,experiments,ml}} scripts tests macros docs data/{synthetic,schemas} dbt_tests/{unit,data/{generic,singular}}
 
 # Install dependencies
 pip install -r requirements.txt
