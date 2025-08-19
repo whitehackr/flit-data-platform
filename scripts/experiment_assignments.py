@@ -57,7 +57,7 @@ def generate_experiment_assignments(users_df: pd.DataFrame) -> pd.DataFrame:
             exp_start = pd.to_datetime(config['start_date'])
             
             # Only assign users who registered before experiment start
-            if registration_date <= exp_start:
+            if registration_date.date() <= pd.to_datetime(exp_start).date():
                 variant = assign_variant_deterministic(
                     user_id, exp_name, config['variants'], config['allocation']
                 )
