@@ -83,10 +83,10 @@ def generate_logistics_data(orders_df: pd.DataFrame) -> pd.DataFrame:
             'total_delivery_days': total_delivery_days,
             'tracking_number': fake.bothify('##??########'),
             'insurance_cost': round(fake.random.uniform(0, 5), 2),
-            'is_expedited': fake.random_element([True, False], weights=(0.15, 0.85)),
+            'is_expedited': fake.boolean(chance_of_getting_true=15),  # 15% chance of True
             'delivery_instructions': fake.random_element([
                 None, 'Leave at door', 'Ring doorbell', 'Signature required'
-            ], weights=(0.6, 0.2, 0.1, 0.1))
+            ])
         })
     
     return pd.DataFrame(logistics_data)

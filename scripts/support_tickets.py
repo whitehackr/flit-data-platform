@@ -1,4 +1,4 @@
-
+# scripts/support_tickets.py
 import pandas as pd
 import numpy as np
 from faker import Faker
@@ -15,29 +15,16 @@ def generate_support_tickets(users_df: pd.DataFrame, orders_df: pd.DataFrame) ->
     support_users = users_df.sample(frac=0.25, random_state=42)
     
     # Define realistic support categories and their frequency
-    issue_categories = {
-        'shipping_delay': 0.25,        # Most common
-        'product_defect': 0.20,
-        'return_request': 0.18,
-        'billing_question': 0.15,
-        'account_issue': 0.12,
-        'general_inquiry': 0.10
-    }
+    issue_categories = ['shipping_delay', 'product_defect', 'return_request', 'billing_question', 'account_issue', 'general_inquiry']
+    issue_weights = [0.25, 0.20, 0.18, 0.15, 0.12, 0.10]
     
     # Priority levels and their distribution
-    priority_levels = {
-        'low': 0.50,
-        'medium': 0.35,
-        'high': 0.15
-    }
+    priority_options = ['low', 'medium', 'high']
+    priority_weights = [0.50, 0.35, 0.15]
     
     # Status distribution (realistic for resolved tickets)
-    status_distribution = {
-        'resolved': 0.70,
-        'closed': 0.20,
-        'in_progress': 0.08,
-        'open': 0.02
-    }
+    status_options = ['resolved', 'closed', 'in_progress', 'open']
+    status_weights = [0.70, 0.20, 0.08, 0.02]
     
     support_tickets = []
     
@@ -49,7 +36,7 @@ def generate_support_tickets(users_df: pd.DataFrame, orders_df: pd.DataFrame) ->
         user_orders = orders_df[orders_df['user_id'] == user_id]
         
         # Generate 1-4 support tickets per user (weighted toward fewer tickets)
-        num_tickets = fake.random_element([1, 1, 1, 2, 2, 3, 4])
+        num_tickets = np.random.choice([1, 2, 3, 4], p=[0.5, 0.3, 0.15, 0.05])
         
         for ticket_num in range(num_tickets):
             # Ticket timing - can be anytime after registration
@@ -58,22 +45,19 @@ def generate_support_tickets(users_df: pd.DataFrame, orders_df: pd.DataFrame) ->
                 end_date=datetime.now().date()
             )
             
-            # Select issue category
-            issue_category = fake.random_element(list(issue_categories.keys()), 
-                                               weights=list(issue_categories.values()))
+            # Select issue category with realistic weights
+            issue_category = np.random.choice(issue_categories, p=issue_weights)
             
-            # Select priority (shipping delays tend to be higher priority)
+            # Select priority (shipping delays and defects tend to be higher priority)
             if issue_category == 'shipping_delay':
-                priority = fake.random_element(['medium', 'high'], weights=[0.6, 0.4])
+                priority = np.random.choice(['medium', 'high'], p=[0.6, 0.4])
             elif issue_category == 'product_defect':
-                priority = fake.random_element(['medium', 'high'], weights=[0.5, 0.5])
+                priority = np.random.choice(['medium', 'high'], p=[0.5, 0.5])
             else:
-                priority = fake.random_element(list(priority_levels.keys()),
-                                             weights=list(priority_levels.values()))
+                priority = np.random.choice(priority_options, p=priority_weights)
             
-            # Select status
-            status = fake.random_element(list(status_distribution.keys()),
-                                       weights=list(status_distribution.values()))
+            # Select status with realistic distribution
+            status = np.random.choice(status_options, p=status_weights)
             
             # Resolution time based on priority and issue type
             resolution_hours = calculate_resolution_time(issue_category, priority, status)
@@ -81,13 +65,13 @@ def generate_support_tickets(users_df: pd.DataFrame, orders_df: pd.DataFrame) ->
             # Satisfaction score (1-5, higher for resolved issues)
             if status in ['resolved', 'closed']:
                 # Resolved tickets tend to have higher satisfaction
-                satisfaction_score = fake.random_element([3, 4, 4, 5, 5], weights=[0.1, 0.3, 0.3, 0.2, 0.1])
+                satisfaction_score = np.random.choice([3, 4, 5], p=[0.2, 0.5, 0.3])
             elif status == 'in_progress':
                 # In progress tickets have neutral satisfaction
-                satisfaction_score = fake.random_element([2, 3, 3, 4], weights=[0.2, 0.4, 0.3, 0.1])
+                satisfaction_score = np.random.choice([2, 3, 4], p=[0.3, 0.5, 0.2])
             else:  # open tickets
                 # Open tickets tend to have lower satisfaction
-                satisfaction_score = fake.random_element([1, 2, 2, 3], weights=[0.3, 0.4, 0.2, 0.1])
+                satisfaction_score = np.random.choice([1, 2, 3], p=[0.4, 0.4, 0.2])
             
             # Generate ticket description based on category
             ticket_description = generate_ticket_description(issue_category, user_orders)
@@ -99,9 +83,10 @@ def generate_support_tickets(users_df: pd.DataFrame, orders_df: pd.DataFrame) ->
             ])
             
             # Channel (how customer contacted support)
-            contact_channel = fake.random_element([
-                'email', 'live_chat', 'phone', 'contact_form'
-            ], weights=[0.45, 0.30, 0.15, 0.10])
+            contact_channel = np.random.choice(
+                ['email', 'live_chat', 'phone', 'contact_form'], 
+                p=[0.45, 0.30, 0.15, 0.10]
+            )
             
             support_tickets.append({
                 'ticket_id': f'TICK_{fake.random_int(100000, 999999)}',
