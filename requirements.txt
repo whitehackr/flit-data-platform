@@ -1,0 +1,21 @@
+
+# Core dependencies for flit-data-platform
+google-cloud-bigquery==3.11.4
+pandas==2.0.3
+numpy==1.24.3
+faker==19.3.0
+
+# BigQuery dependencies
+db-dtypes==1.1.1
+pyarrow==12.0.1
+
+# Data processing and utilities
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Optional: For local development and testing
+pytest==7.4.0
+python-dotenv==1.0.0
+
+# Testing dependencies
+pytest-cov==4.1.0
