@@ -4,6 +4,7 @@ import numpy as np
 from faker import Faker
 import hashlib
 from typing import Dict, List
+from flit_experiment_configs import get_experiment_config
 
 fake = Faker()
 Faker.seed(42)  # Reproducible results
@@ -100,3 +101,47 @@ def assign_variant_deterministic(
     
     # Fallback (shouldn't reach here)
     return variants[0]
+
+def generate_free_shipping_threshold_assignments(users_df: pd.DataFrame) -> pd.DataFrame:
+    """Generate assignments for free_shipping_threshold_test_v1_1_1 experiment"""
+    
+    # Load experiment config
+    config = get_experiment_config('free_shipping_threshold_test_v1_1_1')
+    
+    # Extract experiment parameters
+    exp_name = config['design']['experiment_name']
+    start_date = config['design']['temporal_schedule']['experiment_period_start']
+    end_date = config['design']['temporal_schedule']['experiment_period_end']
+    
+    # Extract variant information
+    control_variant = config['variants']['control']['name']
+    treatment_variant = config['variants']['treatment']['name']
+    control_allocation = config['variants']['control']['allocation']
+    treatment_allocation = config['variants']['treatment']['allocation']
+    
+    variants = [control_variant, treatment_variant]
+    allocations = [control_allocation, treatment_allocation]
+    
+    # Filter eligible users based on config criteria
+    eligible_countries = config['population']['eligibility_criteria']['include']['countries']
+    eligible_users = users_df[users_df['country'].isin(eligible_countries)].copy()
+    
+    assignments = []
+    
+    for _, user in eligible_users.iterrows():
+        user_id = user['user_id']
+        
+        # Assign variant using deterministic hash
+        variant = assign_variant_deterministic(user_id, exp_name, variants, allocations)
+        
+        assignments.append({
+            'user_id': user_id,
+            'experiment_name': exp_name,
+            'variant': variant,
+            'assigned_date': start_date,
+            'experiment_start_date': start_date,
+            'experiment_end_date': end_date,
+            'assignment_method': 'deterministic_hash'
+        })
+    
+    return pd.DataFrame(assignments)
