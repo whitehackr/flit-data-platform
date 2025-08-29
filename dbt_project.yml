@@ -51,3 +51,9 @@ vars:
   # Dataset references
   raw_dataset: 'flit_raw'
   thelook_dataset: 'bigquery-public-data.thelook_ecommerce'
+  
+  # Free shipping threshold experiment v1.1.1 date ranges
+  free_shipping_threshold_v1_1_1_experiment_start_date: '2024-03-01'
+  free_shipping_threshold_v1_1_1_experiment_end_date: '2024-03-16'
+  free_shipping_threshold_v1_1_1_baseline_start_date: '2024-01-01'
+  free_shipping_threshold_v1_1_1_baseline_end_date: '2024-03-01'
