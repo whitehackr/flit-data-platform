@@ -141,8 +141,8 @@ class ExperimentEffectsGenerator:
         daily_weights = self._get_realistic_daily_weights(duration_days)
         
         for user_id in treatment_users:
-            # Calculate total additional orders for this user
-            total_additional_orders = np.random.poisson(additional_orders_per_user * duration_days)
+            # Calculate total additional orders for this user over the entire experiment period
+            total_additional_orders = np.random.poisson(additional_orders_per_user)
             
             if total_additional_orders == 0:
                 continue
