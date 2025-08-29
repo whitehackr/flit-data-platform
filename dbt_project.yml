@@ -1,0 +1,53 @@
+name: 'flit_data_platform'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'flit_data_platform'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["dbt_tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+models:
+  flit_data_platform:
+    # Staging layer - clean and standardize raw data
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+    
+    # Intermediate layer - business logic transformations  
+    intermediate:
+      +materialized: view
+      +tags: ["intermediate"]
+    
+    # Marts layer - analysis-ready datasets
+    marts:
+      +materialized: table
+      core:
+        +tags: ["core", "mart"]
+      experiments:
+        +materialized: table
+        +tags: ["experiments", "mart"]
+      ml:
+        +tags: ["ml", "mart"]
+
+# Global test configuration
+tests:
+  +store_failures: true
+  +severity: warn
+
+# Only essential, project-wide variables here
+vars:
+  # Dataset references
+  raw_dataset: 'flit_raw'
+  thelook_dataset: 'bigquery-public-data.thelook_ecommerce'
