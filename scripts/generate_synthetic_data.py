@@ -121,6 +121,11 @@ class SyntheticDataGenerator:
         else:
             raise NotImplementedError(f"Assignment generation not implemented for experiment: {experiment_name}")
         
+        # Enhance assignments with improved schema and upload to BigQuery
+        from experiment_effects import _enhance_assignments_schema
+        enhanced_assignments_df = _enhance_assignments_schema(assignments_df)
+        self._upload_dataframe(enhanced_assignments_df, "experiment_assignments")
+        
         # Initialize effects generator
         effects_generator = ExperimentEffectsGenerator(
             project_id=self.project_id,

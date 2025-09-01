@@ -3,8 +3,9 @@ import numpy as np
 from google.cloud import bigquery
 from faker import Faker
 import random
+import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 from flit_experiment_configs import get_experiment_config
 import logging
 
@@ -296,8 +297,14 @@ def generate_free_shipping_threshold_overlay(
     # Generate assignments
     assignments_df = generate_free_shipping_threshold_assignments(users_df)
     
-    # Generate overlay data
+    # Enhance assignments with improved schema
+    enhanced_assignments_df = _enhance_assignments_schema(assignments_df)
+    
+    # Upload enhanced assignments to unified table (WRITE_TRUNCATE for now)
     generator = ExperimentEffectsGenerator(project_id, dataset_id)
+    generator._upload_overlay_data(enhanced_assignments_df, "experiment_assignments")
+    
+    # Generate overlay data
     overlay_data = generator.generate_experiment_overlay(
         experiment_name='free_shipping_threshold_test_v1_1_1',
         data_category='orders',
@@ -307,3 +314,34 @@ def generate_free_shipping_threshold_overlay(
     )
     
     return overlay_data
+
+def _enhance_assignments_schema(assignments_df: pd.DataFrame) -> pd.DataFrame:
+    """Enhance assignments DataFrame with improved schema"""
+    
+    enhanced_records = []
+    
+    for _, row in assignments_df.iterrows():
+        # Generate hash-based assignment_id
+        hash_input = f"{row['user_id']}_{row['experiment_name']}_{row['assigned_date']}"
+        assignment_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+        
+        # Map descriptive variants to control/treatment
+        variant_control_treatment = 'control' if row['variant'] == 'current_threshold' else 'treatment'
+        
+        enhanced_record = {
+            'assignment_id': assignment_id,
+            'experiment_name': row['experiment_name'],
+            'object_identifier': str(row['user_id']),
+            'granularity_level': 'user',
+            'variant': variant_control_treatment,
+            'variant_description': row['variant'],
+            'assigned_date': row['assigned_date'],
+            'experiment_start_date': row['experiment_start_date'],
+            'experiment_end_date': row['experiment_end_date'],
+            'assignment_method': row['assignment_method'],
+            'createdAt': datetime.now().isoformat()
+        }
+        
+        enhanced_records.append(enhanced_record)
+    
+    return pd.DataFrame(enhanced_records)
