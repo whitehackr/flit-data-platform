@@ -3,8 +3,9 @@ import numpy as np
 from google.cloud import bigquery
 from faker import Faker
 import random
+import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 from flit_experiment_configs import get_experiment_config
 import logging
 
@@ -289,21 +290,20 @@ def generate_free_shipping_threshold_overlay(
     users_df: pd.DataFrame,
     dataset_id: str = "flit_raw"
 ) -> pd.DataFrame:
-    """Convenience function for free shipping threshold experiment overlay generation"""
+    """Convenience function for free shipping threshold experiment overlay generation
     
-    from experiment_assignments import generate_free_shipping_threshold_assignments
+    DEPRECATED: This function is no longer used. The main flow is now in 
+    generate_synthetic_data.py which has consolidated assignment generation.
+    """
     
-    # Generate assignments
-    assignments_df = generate_free_shipping_threshold_assignments(users_df)
+    # NOTE: This is kept for backward compatibility but should not be used
+    # The main flow is now: generate_synthetic_data.py -> SyntheticDataGenerator.generate_experiment_overlay()
     
-    # Generate overlay data
-    generator = ExperimentEffectsGenerator(project_id, dataset_id)
-    overlay_data = generator.generate_experiment_overlay(
-        experiment_name='free_shipping_threshold_test_v1_1_1',
-        data_category='orders',
-        granularity='order_id',
-        source_table_path='bigquery-public-data.thelook_ecommerce.orders',
-        assignments_df=assignments_df
+    raise DeprecationWarning(
+        "This function is deprecated. Use generate_synthetic_data.py overlay mode instead:\n"
+        "python generate_synthetic_data.py --project-id=X overlay"
     )
-    
-    return overlay_data
+
+# REMOVED: _enhance_assignments_schema() function
+# This functionality has been consolidated into SyntheticDataGenerator._generate_free_shipping_threshold_assignments()
+# in generate_synthetic_data.py for better cohesion and to eliminate the separate enhancement step.

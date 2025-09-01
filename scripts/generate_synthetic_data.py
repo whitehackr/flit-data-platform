@@ -4,10 +4,14 @@ from google.cloud import bigquery
 import argparse
 from datetime import datetime, timedelta
 import logging
+import hashlib
+from typing import List
+from flit_experiment_configs import get_experiment_config
 
-from experiment_assignments import generate_experiment_assignments, generate_free_shipping_threshold_assignments
-from logistics_data import generate_logistics_data  
-from support_tickets import generate_support_tickets
+# Legacy imports moved to archives - only needed for deprecated legacy mode
+# from archives.experiment_assignments import generate_experiment_assignments
+# from archives.logistics_data import generate_logistics_data  
+# from archives.support_tickets import generate_support_tickets
 from experiment_effects import ExperimentEffectsGenerator
 
 class SyntheticDataGenerator:
@@ -89,16 +93,19 @@ class SyntheticDataGenerator:
             orders_df = orders_df[orders_df['user_id'].isin(user_ids)]
             logging.info(f"Sampled {sample_pct}% of data: {len(users_df)} users")
         
-        # Generate synthetic datasets
+        # Generate synthetic datasets (LEGACY - imports from archives)
         logging.info("Generating experiment assignments...")
+        from archives.experiment_assignments import generate_experiment_assignments
         experiments_df = generate_experiment_assignments(users_df)
         self._upload_dataframe(experiments_df, "experiment_assignments")
         
         logging.info("Generating logistics data...")
+        from archives.logistics_data import generate_logistics_data
         logistics_df = generate_logistics_data(orders_df)
         self._upload_dataframe(logistics_df, "logistics_data")
         
         logging.info("Generating support tickets...")
+        from archives.support_tickets import generate_support_tickets
         support_df = generate_support_tickets(users_df, orders_df)
         self._upload_dataframe(support_df, "support_tickets")
         
@@ -114,12 +121,24 @@ class SyntheticDataGenerator:
         # Get base data for assignments
         users_df = self.get_thelook_users()
         
-        # Generate experiment assignments (currently only supports free shipping threshold)
-        # TODO: Make this truly generic when we add more experiments
+        # Generate experiment assignments with enhanced schema (consolidates enhancement logic)
         if experiment_name == "free_shipping_threshold_test_v1_1_1":
-            assignments_df = generate_free_shipping_threshold_assignments(users_df)
+            enhanced_assignments_df = self._generate_free_shipping_threshold_assignments()
         else:
             raise NotImplementedError(f"Assignment generation not implemented for experiment: {experiment_name}")
+        
+        # Upload enhanced assignments to BigQuery
+        self._upload_dataframe(enhanced_assignments_df, "experiment_assignments")
+        
+        # Create basic assignments for overlay generation (backward compatibility)
+        basic_assignments_df = enhanced_assignments_df[[
+            'object_identifier', 'experiment_name', 'variant_description', 'assigned_date',
+            'experiment_start_date', 'experiment_end_date', 'assignment_method'
+        ]].rename(columns={
+            'object_identifier': 'user_id',
+            'variant_description': 'variant'
+        }).copy()
+        basic_assignments_df['user_id'] = basic_assignments_df['user_id'].astype(int)
         
         # Initialize effects generator
         effects_generator = ExperimentEffectsGenerator(
@@ -133,7 +152,7 @@ class SyntheticDataGenerator:
             data_category=data_category,
             granularity=granularity,
             source_table_path=source_table_path,
-            assignments_df=assignments_df
+            assignments_df=basic_assignments_df
         )
         
         logging.info(f"Generated {len(overlay_df)} synthetic overlay records for {experiment_name}")
@@ -226,6 +245,100 @@ class SyntheticDataGenerator:
         job.result()  # Wait for completion
         
         logging.info(f"✅ Uploaded {len(df)} rows to {table_ref}")
+    
+    def _assign_variant_deterministic(
+        self,
+        user_id: int, 
+        experiment_name: str, 
+        variants: List[str], 
+        allocation: List[float]
+    ) -> str:
+        """Deterministically assign user to experiment variant using consistent hashing"""
+        
+        # Create deterministic hash
+        hash_input = f"{user_id}_{experiment_name}"
+        hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+        
+        # Convert to probability between 0 and 1
+        probability = (hash_value % 1000000) / 1000000
+        
+        # Assign based on allocation
+        cumulative_prob = 0
+        for i, (variant, alloc) in enumerate(zip(variants, allocation)):
+            cumulative_prob += alloc
+            if probability <= cumulative_prob:
+                return variant
+        
+        # Fallback (shouldn't reach here)
+        return variants[0]
+    
+    def _generate_free_shipping_threshold_assignments(self) -> pd.DataFrame:
+        """Generate enhanced assignments for free_shipping_threshold_test_v1_1_1 experiment
+        
+        Assigns only users who actually placed orders during the experiment period.
+        Returns enhanced schema with assignment_id and control/treatment mapping.
+        Consolidates the enhancement logic that was previously in _enhance_assignments_schema().
+        """
+        
+        # Load experiment config
+        config = get_experiment_config('free_shipping_threshold_test_v1_1_1')
+        
+        # Extract experiment parameters using config variables
+        exp_name = config['design']['experiment_name']
+        start_date = config['design']['temporal_schedule']['experiment_period_start']
+        end_date = config['design']['temporal_schedule']['experiment_period_end']
+        
+        # Extract variant information
+        control_variant = config['variants']['control']['name']
+        treatment_variant = config['variants']['treatment']['name']
+        control_allocation = config['variants']['control']['allocation']
+        treatment_allocation = config['variants']['treatment']['allocation']
+        
+        variants = [control_variant, treatment_variant]
+        allocations = [control_allocation, treatment_allocation]
+        
+        # Get users who actually placed orders during experiment period
+        participants_query = f"""
+        SELECT DISTINCT user_id
+        FROM `bigquery-public-data.thelook_ecommerce.orders`
+        WHERE created_at >= '{start_date}'
+          AND created_at < '{end_date}'
+        ORDER BY user_id
+        """
+        
+        experiment_participants_df = self.client.query(participants_query).to_dataframe()
+        
+        enhanced_assignments = []
+        
+        # Assign users and create enhanced schema directly
+        for _, row in experiment_participants_df.iterrows():
+            user_id = row['user_id']
+            
+            # Assign variant using deterministic hash
+            variant_description = self._assign_variant_deterministic(user_id, exp_name, variants, allocations)
+            
+            # Generate hash-based assignment_id
+            hash_input = f"{user_id}_{exp_name}_{start_date}"
+            assignment_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+            
+            # Map descriptive variants to control/treatment
+            variant_control_treatment = 'control' if variant_description == control_variant else 'treatment'
+            
+            enhanced_assignments.append({
+                'assignment_id': assignment_id,
+                'experiment_name': exp_name,
+                'object_identifier': str(user_id),
+                'granularity_level': 'user',
+                'variant': variant_control_treatment,
+                'variant_description': variant_description,
+                'assigned_date': start_date,
+                'experiment_start_date': start_date,
+                'experiment_end_date': end_date,
+                'assignment_method': 'deterministic_hash',
+                'createdAt': datetime.now().isoformat()
+            })
+        
+        return pd.DataFrame(enhanced_assignments)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate synthetic data for Flit experiments")
