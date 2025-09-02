@@ -290,20 +290,58 @@ def generate_free_shipping_threshold_overlay(
     users_df: pd.DataFrame,
     dataset_id: str = "flit_raw"
 ) -> pd.DataFrame:
-    """Convenience function for free shipping threshold experiment overlay generation
+    """Convenience function for free shipping threshold experiment overlay generation"""
     
-    DEPRECATED: This function is no longer used. The main flow is now in 
-    generate_synthetic_data.py which has consolidated assignment generation.
-    """
+    from experiment_assignments import generate_free_shipping_threshold_assignments
     
-    # NOTE: This is kept for backward compatibility but should not be used
-    # The main flow is now: generate_synthetic_data.py -> SyntheticDataGenerator.generate_experiment_overlay()
+    # Generate assignments
+    assignments_df = generate_free_shipping_threshold_assignments(users_df)
     
-    raise DeprecationWarning(
-        "This function is deprecated. Use generate_synthetic_data.py overlay mode instead:\n"
-        "python generate_synthetic_data.py --project-id=X overlay"
+    # Enhance assignments with improved schema
+    enhanced_assignments_df = _enhance_assignments_schema(assignments_df)
+    
+    # Upload enhanced assignments to unified table (WRITE_TRUNCATE for now)
+    generator = ExperimentEffectsGenerator(project_id, dataset_id)
+    generator._upload_overlay_data(enhanced_assignments_df, "experiment_assignments")
+    
+    # Generate overlay data
+    overlay_data = generator.generate_experiment_overlay(
+        experiment_name='free_shipping_threshold_test_v1_1_1',
+        data_category='orders',WYC
+        granularity='order_id',
+        source_table_path='bigquery-public-data.thelook_ecommerce.orders',
+        assignments_df=assignments_df
     )
+    
+    return overlay_data
 
-# REMOVED: _enhance_assignments_schema() function
-# This functionality has been consolidated into SyntheticDataGenerator._generate_free_shipping_threshold_assignments()
-# in generate_synthetic_data.py for better cohesion and to eliminate the separate enhancement step.
+def _enhance_assignments_schema(assignments_df: pd.DataFrame) -> pd.DataFrame:
+    """Enhance assignments DataFrame with improved schema"""
+    
+    enhanced_records = []
+    
+    for _, row in assignments_df.iterrows():
+        # Generate hash-based assignment_id
+        hash_input = f"{row['user_id']}_{row['experiment_name']}_{row['assigned_date']}"
+        assignment_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+        
+        # Map descriptive variants to control/treatment
+        variant_control_treatment = 'control' if row['variant'] == 'current_threshold' else 'treatment'
+        
+        enhanced_record = {
+            'assignment_id': assignment_id,
+            'experiment_name': row['experiment_name'],
+            'object_identifier': str(row['user_id']),
+            'granularity_level': 'user',
+            'variant': variant_control_treatment,
+            'variant_description': row['variant'],
+            'assigned_date': row['assigned_date'],
+            'experiment_start_date': row['experiment_start_date'],
+            'experiment_end_date': row['experiment_end_date'],
+            'assignment_method': row['assignment_method'],
+            'createdAt': datetime.now().isoformat()
+        }
+        
+        enhanced_records.append(enhanced_record)
+    
+    return pd.DataFrame(enhanced_records)
