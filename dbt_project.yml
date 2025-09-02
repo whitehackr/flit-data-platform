@@ -23,16 +23,19 @@ models:
     # Staging layer - clean and standardize raw data
     staging:
       +materialized: view
+      +schema: staging  # This allows operationalization of the macro: generate_schema_name
       +tags: ["staging"]
     
     # Intermediate layer - business logic transformations  
     intermediate:
       +materialized: view
+      +schema: intermediate
       +tags: ["intermediate"]
     
     # Marts layer - analysis-ready datasets
     marts:
       +materialized: table
+      +schema: marts
       core:
         +tags: ["core", "mart"]
       experiments:

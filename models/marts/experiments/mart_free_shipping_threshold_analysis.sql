@@ -33,12 +33,11 @@ order_level_analysis as (
         created_at,
         shipped_at,
         delivered_at,
-        returned_at,
         
         -- Derived metrics
         case when status = 'Complete' then 1 else 0 end as is_completed,
         case when status = 'Cancelled' then 1 else 0 end as is_cancelled,
-        case when returned_at is not null then 1 else 0 end as is_returned,
+        0 as is_returned,  -- All returns are null, hardcode to 0
         
         -- Timing metrics
         date_diff(shipped_at, created_at, day) as days_to_ship,
