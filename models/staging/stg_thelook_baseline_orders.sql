@@ -23,7 +23,6 @@ renamed as (
         created_at,
         shipped_at,
         delivered_at,
-        returned_at,
         
         -- Data lineage
         'thelook_baseline' as data_source,

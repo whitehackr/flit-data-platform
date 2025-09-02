@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: int_experiment_orders_union
+    description: "Combined baseline and synthetic orders with experiment assignments"
+    columns:
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - unique
+          - not_null
+      
+      - name: user_id
+        description: "Unique identifier for user placing the order"
+        tests:
+          - not_null
+      
+      - name: control_treatment
+        description: "Control or treatment assignment for experiment participants"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['control', 'treatment']
+      
+      - name: variant_description
+        description: "Descriptive name of the experiment variant"
+      
+      - name: experiment_status
+        description: "Whether user participated in the experiment"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['experiment_participant', 'non_participant']
+      
+      - name: data_source
+        description: "Source of the data"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['thelook_baseline', 'synthetic_overlay']

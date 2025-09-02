@@ -23,10 +23,6 @@ renamed as (
         created_at,
         shipped_at,
         delivered_at,
-        case 
-            when returned_at = '' then null
-            else safe.parse_timestamp('%Y-%m-%d %H:%M:%S UTC', returned_at)
-        end as returned_at,
         
         -- Data lineage
         'synthetic_overlay' as data_source,

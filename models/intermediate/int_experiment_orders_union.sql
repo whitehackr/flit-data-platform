@@ -10,10 +10,34 @@ synthetic_overlay as (
     select * from {{ ref('stg_synthetic_overlay_orders') }}
 ),
 
+experiment_assignments as (
+    select 
+        cast(object_identifier as int64) as user_id,
+        experiment_name,
+        variant as control_treatment,
+        variant_description
+    from {{ source('flit_raw', 'experiment_assignments') }}
+    where experiment_name = 'free_shipping_threshold_test_v1_1_1'
+),
+
 unioned as (
     select * from baseline_data
     union all
     select * from synthetic_overlay
+),
+
+final as (
+    select 
+        u.*,
+        a.control_treatment,
+        a.variant_description,
+        case 
+            when a.control_treatment is not null then 'experiment_participant'
+            else 'non_participant'
+        end as experiment_status
+    from unioned u
+    left join experiment_assignments a 
+        on u.user_id = a.user_id
 )
 
-select * from unioned
+select * from final
