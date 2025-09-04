@@ -307,7 +307,7 @@ def generate_free_shipping_threshold_overlay(
     # Generate overlay data
     overlay_data = generator.generate_experiment_overlay(
         experiment_name='free_shipping_threshold_test_v1_1_1',
-        data_category='orders',WYC
+        data_category='orders',
         granularity='order_id',
         source_table_path='bigquery-public-data.thelook_ecommerce.orders',
         assignments_df=assignments_df
