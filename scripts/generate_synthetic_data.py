@@ -232,7 +232,13 @@ class SyntheticDataGenerator:
         table_ref = f"{self.project_id}.{self.dataset_id}.{table_name}"
         
         # Convert DataFrame to records for JSON upload (same method as experiment_effects.py)
-        records = df.to_dict('records')
+        # Convert timestamps to strings for JSON serialization
+        df_copy = df.copy()
+        for col in df_copy.columns:
+            if df_copy[col].dtype == 'datetime64[ns]':
+                df_copy[col] = df_copy[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        records = df_copy.to_dict('records')
         
         # Configure load job for JSON format
         job_config = bigquery.LoadJobConfig(
