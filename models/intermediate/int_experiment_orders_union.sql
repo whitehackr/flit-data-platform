@@ -3,7 +3,7 @@
 with baseline_data as (
     select * from {{ ref('stg_thelook_baseline_orders') }}
     where created_at >= '{{ var("free_shipping_threshold_v1_1_1_baseline_start_date") }}'
-    and created_at < '{{ var("free_shipping_threshold_v1_1_1_baseline_end_date") }}'
+    and created_at < '{{ var("free_shipping_threshold_v1_1_1_experiment_end_date") }}'
 ),
 
 synthetic_overlay as (

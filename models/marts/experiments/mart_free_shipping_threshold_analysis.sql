@@ -14,6 +14,9 @@ order_level_analysis as (
         data_source,
         experiment_name,
         variant,
+        control_treatment,
+        variant_description,
+        experiment_status,
         
         -- Time period classification
         case 
