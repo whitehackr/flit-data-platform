@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: mart_free_shipping_threshold_analysis
+    description: "Order-level experiment analysis data for free shipping threshold test"
+    columns:
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - unique
+          - not_null
+      
+      - name: user_id
+        description: "User identifier"
+        tests:
+          - not_null
+      
+      - name: time_period
+        description: "Classification of order timing relative to experiment"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['baseline_period', 'experiment_period']
+      
+      - name: data_source
+        description: "Source of the order data"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['synthetic_overlay', 'thelook_baseline']
+      
+      - name: experiment_name
+        description: "Experiment name for synthetic orders"
+        tests:
+          - not_null:
+              where: "data_source = 'synthetic_overlay'"
+      
+      - name: variant
+        description: "Experiment variant for synthetic orders"
+        tests:
+          - not_null:
+              where: "data_source = 'synthetic_overlay'"
+          - accepted_values:
+              values: ['reduced_threshold']
+              where: "variant is not null"
+      
+      - name: status
+        description: "Order status"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Complete', 'Cancelled', 'Processing', 'Shipped', 'Returned']
+      
+      - name: created_at
+        description: "Order creation timestamp"
+        tests:
+          - not_null
+      
+      - name: is_completed
+        description: "Binary flag for completed orders"
+      
+      - name: is_cancelled
+        description: "Binary flag for cancelled orders"
+      
+      - name: is_returned
+        description: "Binary flag for returned orders"

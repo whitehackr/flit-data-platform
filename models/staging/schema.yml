@@ -1,0 +1,128 @@
+version: 2
+
+sources:
+  - name: flit_raw
+    description: "Raw data from synthetic data generation pipeline"
+    tables:
+      - name: experiment_assignments
+        description: "User assignments for experiments with enhanced schema"
+        columns:
+          - name: assignment_id
+            description: "Unique identifier for each assignment"
+            tests:
+              - unique
+              - not_null
+          
+          - name: object_identifier
+            description: "User ID as string"
+            tests:
+              - not_null
+          
+          - name: experiment_name
+            description: "Name of the experiment"
+            tests:
+              - not_null
+          
+          - name: variant
+            description: "Control or treatment assignment"
+            tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ['control', 'treatment']
+          
+          - name: variant_description
+            description: "Descriptive variant name"
+            tests:
+              - not_null
+
+models:
+  - name: stg_synthetic_overlay_orders
+    description: "Synthetic overlay orders for experiments with standardized schema"
+    columns:
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - unique
+          - not_null
+      
+      - name: user_id
+        description: "Unique identifier for user placing the order"
+        tests:
+          - not_null
+      
+      - name: experiment_name
+        description: "Name of the experiment this order belongs to"
+        tests:
+          - not_null
+      
+      - name: variant
+        description: "Experiment variant for this order"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['reduced_threshold']
+      
+      - name: status
+        description: "Order status"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Complete', 'Cancelled', 'Processing', 'Shipped', 'Returned']
+      
+      - name: gender
+        description: "Customer gender"
+        tests:
+          - accepted_values:
+              values: ['M', 'F']
+      
+      - name: created_at
+        description: "Order creation timestamp"
+        tests:
+          - not_null
+      
+      - name: data_source
+        description: "Source of the data"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['synthetic_overlay']
+
+  - name: stg_thelook_baseline_orders
+    description: "TheLook baseline orders with standardized schema"
+    columns:
+      - name: order_id
+        description: "Unique identifier for each order"
+        tests:
+          - unique
+          - not_null
+      
+      - name: user_id
+        description: "Unique identifier for user placing the order"
+        tests:
+          - not_null
+      
+      - name: status
+        description: "Order status"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Complete', 'Cancelled', 'Processing', 'Shipped', 'Returned']
+      
+      - name: gender
+        description: "Customer gender"
+        tests:
+          - accepted_values:
+              values: ['M', 'F']
+      
+      - name: created_at
+        description: "Order creation timestamp"
+        tests:
+          - not_null
+      
+      - name: data_source
+        description: "Source of the data"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['thelook_baseline']

@@ -1,12 +1,17 @@
+<<<<<<< HEAD
 
 # Name your project! Project names should contain only lowercase characters
 # and underscores. A good package name should reflect your organization's
 # name or the intended use of these models
 name: 'my_new_project'
+=======
+name: 'flit_data_platform'
+>>>>>>> 21cfd7365d4728c068abd0631ad9f9b3eec797b3
 version: '1.0.0'
 config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
+<<<<<<< HEAD
 profile: 'default'
 
 # These configurations specify where dbt should look for different types of files.
@@ -40,3 +45,62 @@ models:
     # Applies to all files under models/example/
     example:
       +materialized: table
+=======
+profile: 'flit_data_platform'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["dbt_tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+models:
+  flit_data_platform:
+    # Staging layer - clean and standardize raw data
+    staging:
+      +materialized: view
+      +schema: staging  # This allows operationalization of the macro: generate_schema_name
+      +tags: ["staging"]
+    
+    # Intermediate layer - business logic transformations  
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +tags: ["intermediate"]
+    
+    # Marts layer - analysis-ready datasets
+    marts:
+      +materialized: table
+      +schema: marts
+      core:
+        +tags: ["core", "mart"]
+      experiments:
+        +materialized: table
+        +tags: ["experiments", "mart"]
+      ml:
+        +tags: ["ml", "mart"]
+
+# Global test configuration
+tests:
+  +store_failures: true
+  +severity: warn
+
+# Only essential, project-wide variables here
+vars:
+  # Dataset references
+  raw_dataset: 'flit_raw'
+  thelook_dataset: 'bigquery-public-data.thelook_ecommerce'
+  
+  # Free shipping threshold experiment v1.1.1 date ranges
+  free_shipping_threshold_v1_1_1_experiment_start_date: '2024-03-01'
+  free_shipping_threshold_v1_1_1_experiment_end_date: '2024-03-16'
+  free_shipping_threshold_v1_1_1_baseline_start_date: '2024-01-01'
+  free_shipping_threshold_v1_1_1_baseline_end_date: '2024-03-01'
+>>>>>>> 21cfd7365d4728c068abd0631ad9f9b3eec797b3
