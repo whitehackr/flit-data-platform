@@ -10,7 +10,7 @@ git+https://github.com/whitehackr/flit-experiments.git
 
 # BigQuery dependencies
 db-dtypes==1.1.1
-pyarrow==12.0.1
+pyarrow==21.0.0
 
 # Data processing and utilities
 python-dateutil==2.8.2
