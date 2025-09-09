@@ -126,3 +126,69 @@ models:
           - not_null
           - accepted_values:
               values: ['thelook_baseline']
+
+
+  - name: stg_experiment_assignments
+    description: "Experiment assignments handled by _generate_free_shipping_threshold_assignments() in scripts/generate_synthetic_data.py"
+    columns:
+      - name: experiment_start_date
+        description: "Date indicating start date of experiment"
+        tests:
+          - not_null
+      
+      - name: assigned_date
+        description: "Date mimicking when the user entered experiment funnel and was assigned a variant group -- should be first order date in experiment period"
+        tests:
+          - not_null
+      
+      - name: variant_description
+        description: "Describes the control/treatment for the specific experiment. e.g current/reduced threshold, blue/red button, etc"
+        tests:
+          - not_null
+        
+      - name: assignment_method
+        description: "Describes approach used to assign users to variant"
+        tests:
+          - not_null
+      
+      
+      - name: experiment_end_date
+        description: "Date when experiment ends"
+        tests:
+          - not_null
+      
+      - name: granularity_level
+        description: "Describes what an individual record represents. That is, what is being assigned to the variant groups? Is it orders, users, sessions, etc"
+        tests:
+          - not_null
+      
+      - name: object_identifier
+        description: "The unique identifier of the object being assigned to the variant"
+        tests:
+          - not_null
+          #- unique    # Need to keep in mind, however, that it is possible, though rare to have non-unique records, esp because users might be in more than 1 experiments in their lifetime in Flit
+
+      - name: createdAt
+        description: "Data when record was written in the table"
+        tests:
+          - not_null
+
+
+      - name: experiment_name
+        description: "Identifier of the experiment --  should contain name and version number of experiment according to experiments.yaml from flit-experiments"
+        tests:
+          - not_null
+
+
+      - name: variant
+        description: "The experiment assignment group"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['control', 'treatment']
+
+      - name: assignment_id
+        description: "Unique identifier for each assignment"
+        tests:
+          - not_null
+          - unique
