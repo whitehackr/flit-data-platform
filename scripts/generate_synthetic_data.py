@@ -93,10 +93,9 @@ class SyntheticDataGenerator:
             orders_df = orders_df[orders_df['user_id'].isin(user_ids)]
             logging.info(f"Sampled {sample_pct}% of data: {len(users_df)} users")
         
-        # Generate synthetic datasets (LEGACY - imports from archives)
+        # Generate experiment assignments using modern method (independent of sampling)
         logging.info("Generating experiment assignments...")
-        from archives.experiment_assignments import generate_experiment_assignments
-        experiments_df = generate_experiment_assignments(users_df)
+        experiments_df = self._generate_free_shipping_threshold_assignments()
         self._upload_dataframe(experiments_df, "experiment_assignments")
         
         logging.info("Generating logistics data...")
@@ -232,15 +231,25 @@ class SyntheticDataGenerator:
         
         table_ref = f"{self.project_id}.{self.dataset_id}.{table_name}"
         
-        # Configure load job
+        # Convert DataFrame to records for JSON upload (same method as experiment_effects.py)
+        # Convert timestamps to strings for JSON serialization
+        df_copy = df.copy()
+        for col in df_copy.columns:
+            if df_copy[col].dtype == 'datetime64[ns]':
+                df_copy[col] = df_copy[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        records = df_copy.to_dict('records')
+        
+        # Configure load job for JSON format
         job_config = bigquery.LoadJobConfig(
             write_disposition="WRITE_TRUNCATE",  # Replace existing data
-            autodetect=True  # Auto-detect schema
+            autodetect=True,  # Auto-detect schema
+            source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON
         )
         
-        # Upload data
-        job = self.client.load_table_from_dataframe(
-            df, table_ref, job_config=job_config
+        # Upload data using JSON format
+        job = self.client.load_table_from_json(
+            records, table_ref, job_config=job_config
         )
         job.result()  # Wait for completion
         
