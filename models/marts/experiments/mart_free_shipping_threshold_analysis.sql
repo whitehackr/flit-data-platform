@@ -21,9 +21,9 @@ order_level_analysis as (
         -- Time period classification
         case 
             when created_at >= '{{ var("free_shipping_threshold_v1_1_1_experiment_start_date") }}' 
-                 and created_at < '{{ var("free_shipping_threshold_v1_1_1_experiment_end_date") }}' then 'experiment_period'
+                 and created_at <= '{{ var("free_shipping_threshold_v1_1_1_experiment_end_date") }}' then 'experiment_period'
             when created_at >= '{{ var("free_shipping_threshold_v1_1_1_baseline_start_date") }}' 
-                 and created_at < '{{ var("free_shipping_threshold_v1_1_1_baseline_end_date") }}' then 'baseline_period' 
+                 and created_at <= '{{ var("free_shipping_threshold_v1_1_1_baseline_end_date") }}' then 'baseline_period' 
             else 'other'
         end as time_period,
         
@@ -52,7 +52,7 @@ order_level_analysis as (
         
     from experiment_data
     where created_at >= '{{ var("free_shipping_threshold_v1_1_1_baseline_start_date") }}'
-          and created_at < '{{ var("free_shipping_threshold_v1_1_1_experiment_end_date") }}'
+          and created_at <= '{{ var("free_shipping_threshold_v1_1_1_experiment_end_date") }}'
 )
 
 select * from order_level_analysis

@@ -302,7 +302,7 @@ class SyntheticDataGenerator:
         SELECT DISTINCT user_id
         FROM `bigquery-public-data.thelook_ecommerce.orders`
         WHERE created_at >= '{start_date}'
-          AND created_at < '{end_date}'
+          AND created_at <= '{end_date}'
         ORDER BY user_id
         """
         

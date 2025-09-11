@@ -20,9 +20,9 @@ renamed as (
         num_of_item,
         
         -- Timestamps
-        created_at,
-        shipped_at,
-        delivered_at,
+        timestamp(created_at) as created_at,
+        timestamp(shipped_at) as shipped_at,
+        timestamp(delivered_at) as delivered_at,
         
         -- Data lineage
         'synthetic_overlay' as data_source,
