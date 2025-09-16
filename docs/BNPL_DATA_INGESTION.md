@@ -60,11 +60,13 @@ simtom API → API Client → Data Transformation → BigQuery (Batch Loading)
 from scripts.bnpl.historical_ingestion import BNPLHistoricalIngester, IngestionConfig
 from datetime import date
 
-# Configuration
+# Configuration with realistic volume patterns
 config = IngestionConfig(
     start_date=date(2024, 1, 1),
     end_date=date(2024, 12, 31),
-    records_per_day=5000,  # ~1.8M total over 365 days
+    base_daily_volume=5000,  # Average volume (varies realistically)
+    batch_days=30,  # Monthly batches for speed
+    seed=42,  # Reproducible realistic patterns
     progress_file="bnpl_ingestion_progress.json"
 )
 
@@ -74,15 +76,16 @@ result = ingester.run_historical_ingestion()
 
 print(f"Status: {result['status']}")
 print(f"Records ingested: {result['total_records_ingested']}")
+print(f"Volume variations: Christmas {int(5000*0.12):,}, Black Friday {int(5000*2.04):,}")
 ```
 
 ### Production Usage
 
 ```bash
-# Full historical ingestion
+# Full historical ingestion with realistic patterns
 python -m scripts.bnpl.historical_ingestion
 
-# Custom date range
+# Custom date range with realistic volumes
 python -c "
 from scripts.bnpl.historical_ingestion import BNPLHistoricalIngester, IngestionConfig
 from datetime import date
@@ -90,7 +93,9 @@ from datetime import date
 config = IngestionConfig(
     start_date=date(2024, 6, 1),
     end_date=date(2024, 6, 30),
-    records_per_day=5000
+    base_daily_volume=5000,  # Average - actual varies by business patterns
+    batch_days=7,  # Weekly batches
+    seed=42  # Reproducible results
 )
 
 ingester = BNPLHistoricalIngester(config)
@@ -104,13 +109,25 @@ print(result)
 ### IngestionConfig Parameters
 
 - `start_date` / `end_date`: Date range for historical data
-- `records_per_day`: Target records per day (simtom applies realistic variations)
+- `base_daily_volume`: Average daily volume (actual varies with realistic business patterns)
+- `seed`: Random seed for reproducible realistic volume patterns
+- `batch_days`: Group multiple days per BigQuery job for performance (default: 30)
 - `project_id`: BigQuery project ID
 - `dataset_id`: BigQuery dataset name
 - `table_name`: BigQuery table name
 - `progress_file`: Progress tracking file location
 - `max_retries`: Retry attempts for failed API calls
 - `retry_delay`: Delay between retry attempts
+
+### Realistic Volume Patterns
+
+The ingestion engine uses simtom's business intelligence to generate realistic daily variations:
+
+- **Weekend reduction**: 70-85% of weekday volumes
+- **Holiday effects**: Christmas ~10%, Black Friday ~160% of baseline
+- **Seasonal patterns**: January post-holiday low, November pre-holiday high
+- **Paycheck cycles**: Higher volumes in weeks 1 & 3 of month
+- **Daily noise**: Natural ±10% variation for realism
 
 ### Environment Setup
 
