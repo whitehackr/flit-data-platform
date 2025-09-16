@@ -115,50 +115,57 @@ class BNPLAPIClient:
         self,
         start_date: str,
         end_date: str,
-        total_records: int = 1000,
-        rate_per_second: int = 1000
-    ) -> Dict[str, Any]:
+        base_daily_volume: int = 5000,
+        seed: int = 42,
+        use_realistic_volumes: bool = True
+    ) -> List[Dict[str, Any]]:
         """
-        Fetch BNPL transaction data from the simtom API.
-        
+        Fetch BNPL transaction data from the simtom API with realistic volume patterns.
+
         Args:
             start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format  
-            total_records: Number of records to generate
-            rate_per_second: Generation rate (records per second)
-            
+            end_date: End date in YYYY-MM-DD format
+            base_daily_volume: Average daily transaction volume (actual varies realistically)
+            seed: Random seed for reproducible datasets
+            use_realistic_volumes: Use new realistic volume API vs legacy fixed volumes
+
         Returns:
-            Dict containing API response data
-            
+            List of transaction records with realistic daily volume variations
+
         Raises:
             SimtomAPIError: If API request fails
             ValueError: If parameters are invalid
         """
         # Validate inputs
         self._validate_date_range(start_date, end_date)
-        
-        if total_records <= 0 or total_records > 50000:
-            raise ValueError("total_records must be between 1 and 50,000")
-        
-        if rate_per_second <= 0 or rate_per_second > 10000:
-            raise ValueError("rate_per_second must be between 1 and 10,000")
-        
-        # Prepare request payload
-        payload = {
-            "start_date": start_date,
-            "end_date": end_date,
-            "total_records": total_records,
-            "rate_per_second": rate_per_second
-        }
-        
+
+        if base_daily_volume <= 0 or base_daily_volume > 50000:
+            raise ValueError("base_daily_volume must be between 1 and 50,000")
+
+        # Prepare request payload for new realistic volume API
+        if use_realistic_volumes:
+            payload = {
+                "start_date": start_date,
+                "end_date": end_date,
+                "base_daily_volume": base_daily_volume,
+                "seed": seed
+            }
+            log_msg = f"Requesting realistic BNPL data: {start_date} to {end_date}, base volume {base_daily_volume}/day"
+        else:
+            # Fallback to legacy API for backward compatibility
+            payload = {
+                "start_date": start_date,
+                "end_date": end_date,
+                "total_records": base_daily_volume,
+                "rate_per_second": 1000
+            }
+            log_msg = f"Requesting fixed BNPL data: {start_date} to {end_date}, {base_daily_volume} records"
+
         # Enforce rate limiting
         self._enforce_rate_limit()
-        
+
         # Log request
-        self.logger.info(
-            f"Requesting BNPL data: {start_date} to {end_date}, "
-            f"{total_records} records at {rate_per_second}/sec"
-        )
+        self.logger.info(log_msg)
         
         try:
             response = self.session.post(
@@ -168,22 +175,37 @@ class BNPLAPIClient:
             )
             response.raise_for_status()
             
-            # Parse SSE stream response
+            # Parse SSE stream response (multiple records)
             response_text = response.text.strip()
-            if response_text.startswith('data: '):
-                # Remove SSE prefix and parse JSON
-                json_data = response_text[6:]  # Remove 'data: ' prefix
-                data = json.loads(json_data)
+            records = []
+            
+            if 'data: ' in response_text:
+                # Split by lines and parse each SSE record
+                lines = response_text.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('data: '):
+                        json_data = line[6:]  # Remove 'data: ' prefix
+                        try:
+                            record = json.loads(json_data)
+                            records.append(record)
+                        except json.JSONDecodeError as e:
+                            self.logger.warning(f"Skipping invalid JSON line: {e}")
+                            continue
             else:
                 # Fallback to regular JSON parsing
                 data = response.json()
+                if isinstance(data, list):
+                    records = data
+                else:
+                    records = [data]
             
-            # Basic response validation
-            if not isinstance(data, dict):
-                raise SimtomAPIError("Invalid response format: expected JSON object")
+            # Validation
+            if not records:
+                raise SimtomAPIError("No valid records received from API")
             
-            self.logger.info(f"Successfully retrieved BNPL data for {start_date}")
-            return data
+            self.logger.info(f"Successfully retrieved {len(records)} BNPL records for {start_date}")
+            return records
             
         except requests.exceptions.RequestException as e:
             error_msg = f"API request failed: {str(e)}"
@@ -197,30 +219,34 @@ class BNPLAPIClient:
     def get_daily_batch(
         self,
         target_date: date,
-        total_records: int = 5000
-    ) -> Dict[str, Any]:
+        base_daily_volume: int = 5000,
+        seed: int = 42
+    ) -> List[Dict[str, Any]]:
         """
-        Get daily batch of BNPL transactions for a specific date.
-        
-        Relies on simtom's built-in business logic for realistic patterns:
-        - Weekend/weekday variations
-        - Holiday spikes  
-        - Seasonal patterns
-        
+        Get realistic daily batch of BNPL transactions for a specific date.
+
+        Uses simtom's new realistic volume API with built-in business intelligence:
+        - Weekend/weekday variations (weekends ~70% of weekdays)
+        - Holiday effects (Christmas ~10%, Black Friday ~160%)
+        - Seasonal patterns (January low, November high)
+        - Paycheck cycle effects (week 1 & 3 higher)
+
         Args:
             target_date: Date to generate data for
-            total_records: Total records to generate for this date
-            
+            base_daily_volume: Average daily volume (actual will vary realistically)
+            seed: Random seed for reproducible results
+
         Returns:
-            Dict containing API response data
+            List of transaction records with realistic volume for the date
         """
         date_str = target_date.strftime('%Y-%m-%d')
-        
+
         return self.get_bnpl_data(
             start_date=date_str,
             end_date=date_str,
-            total_records=total_records,
-            rate_per_second=1000
+            base_daily_volume=base_daily_volume,
+            seed=seed,
+            use_realistic_volumes=True
         )
 
     def test_connection(self) -> bool:
@@ -233,14 +259,18 @@ class BNPLAPIClient:
         try:
             # Use a minimal request to test connectivity
             test_date = "2024-01-01"
-            self.get_bnpl_data(
+            records = self.get_bnpl_data(
                 start_date=test_date,
                 end_date=test_date,
                 total_records=1,
                 rate_per_second=1
             )
-            self.logger.info("API connection test successful")
-            return True
+            if records and len(records) > 0:
+                self.logger.info("API connection test successful")
+                return True
+            else:
+                self.logger.error("API connection test failed: No records returned")
+                return False
         except Exception as e:
             self.logger.error(f"API connection test failed: {str(e)}")
             return False
