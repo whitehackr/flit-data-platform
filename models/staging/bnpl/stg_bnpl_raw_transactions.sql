@@ -13,25 +13,10 @@ parsed as (
             cast(_timestamp as string)
         ))) as unique_transaction_id,
 
-        -- Original transaction ID (resets daily)
-        json_extract_scalar(json_body, '$.transaction_id') as original_transaction_id,
+        -- Extract all JSON fields dynamically
+        {{ generate_flatten_json(source('flit_bnpl_raw', 'raw_bnpl_txs_json')) }},
 
-        -- Core transaction fields
-        json_extract_scalar(json_body, '$.customer_id') as customer_id,
-        json_extract_scalar(json_body, '$.product_id') as product_id,
-        cast(json_extract_scalar(json_body, '$.amount') as numeric) as amount,
-        json_extract_scalar(json_body, '$.currency') as currency,
-        json_extract_scalar(json_body, '$.status') as status,
-
-        -- Risk and ML fields
-        cast(json_extract_scalar(json_body, '$.risk_score') as float64) as risk_score,
-        json_extract_scalar(json_body, '$.risk_level') as risk_level,
-        cast(json_extract_scalar(json_body, '$.will_default') as boolean) as will_default,
-
-        -- Payment method
-        json_extract_scalar(json_body, '$.payment_method_id') as payment_method_id,
-
-        -- Timestamps
+        -- Timestamps from raw table
         _timestamp as transaction_timestamp,
         _ingestion_timestamp,
 
