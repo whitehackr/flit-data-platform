@@ -23,8 +23,7 @@ BNPL_RAW_SCHEMA = [
     bigquery.SchemaField("product_id", "STRING", mode="REQUIRED", description="Product identifier"),
     
     # Timestamps - Critical for partitioning and time-series analysis
-    bigquery.SchemaField("timestamp", "TIMESTAMP", mode="REQUIRED", description="Transaction timestamp (simtom generated)"),
-    bigquery.SchemaField("_timestamp", "TIMESTAMP", mode="REQUIRED", description="Ingestion timestamp for partitioning"),
+    bigquery.SchemaField("_timestamp", "TIMESTAMP", mode="REQUIRED", description="Transaction timestamp from simtom API"),
     
     # Key financial data - Core for analytics
     bigquery.SchemaField("amount", "NUMERIC", mode="REQUIRED", description="Transaction amount"),
