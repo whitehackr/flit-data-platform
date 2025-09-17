@@ -59,6 +59,32 @@ TABLE_CONFIG = {
     )
 }
 
+# New simplified JSON-only schema for reliable ingestion
+BNPL_JSON_SCHEMA = [
+    # Partition field - extracted from JSON for performance
+    bigquery.SchemaField("_timestamp", "TIMESTAMP", mode="REQUIRED", description="Transaction timestamp for partitioning"),
+
+    # All transaction data as JSON
+    bigquery.SchemaField("json_body", "JSON", mode="REQUIRED", description="Complete transaction record from simtom API"),
+
+    # Ingestion metadata
+    bigquery.SchemaField("_ingestion_timestamp", "TIMESTAMP", mode="REQUIRED", description="When this record was ingested into BigQuery"),
+]
+
+# Table config for JSON table - same partitioning approach
+JSON_TABLE_CONFIG = {
+    "time_partitioning": bigquery.TimePartitioning(
+        type_=bigquery.TimePartitioningType.DAY,
+        field="_timestamp",
+        require_partition_filter=True
+    ),
+    "description": "Raw BNPL transaction data in JSON format for dbt transformation"
+}
+
 def get_table_reference(project_id: str = "flit-data-platform", dataset_id: str = "flit_bnpl_raw", table_name: str = "raw_bnpl_transactions") -> str:
     """Get fully qualified table name for BNPL raw transactions."""
+    return f"{project_id}.{dataset_id}.{table_name}"
+
+def get_json_table_reference(project_id: str = "flit-data-platform", dataset_id: str = "flit_bnpl_raw", table_name: str = "raw_bnpl_txs_json") -> str:
+    """Get fully qualified table name for BNPL JSON transactions."""
     return f"{project_id}.{dataset_id}.{table_name}"

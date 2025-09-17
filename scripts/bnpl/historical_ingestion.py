@@ -11,7 +11,8 @@ Designed for production-grade data pipeline with:
 
 import logging
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
+from decimal import Decimal
 from typing import Dict, Any, List, Optional
 import json
 import os
@@ -21,7 +22,7 @@ from google.cloud import bigquery
 from google.cloud.exceptions import GoogleCloudError
 
 from .api_client import BNPLAPIClient, SimtomAPIError
-from .schema import BNPL_RAW_SCHEMA, TABLE_CONFIG, get_table_reference
+from .schema import BNPL_RAW_SCHEMA, TABLE_CONFIG, get_table_reference, BNPL_JSON_SCHEMA, JSON_TABLE_CONFIG, get_json_table_reference
 
 
 @dataclass
@@ -151,94 +152,121 @@ class BNPLHistoricalIngester:
         # Initialize progress tracker
         self.progress_tracker = IngestionProgressTracker(config.progress_file)
         
-        # Get table reference
-        self.table_ref = get_table_reference(config.project_id, config.dataset_id)
+        # Use JSON table for reliable ingestion
+        self.table_ref = get_json_table_reference(config.project_id, config.dataset_id)
         
     def setup_bigquery_table(self) -> bigquery.Table:
         """Create or verify BigQuery table exists with proper schema."""
         dataset_ref = self.bq_client.dataset(self.config.dataset_id)
         table_ref = dataset_ref.table(self.config.table_name)
-        
+
         try:
             # Try to get existing table
             table = self.bq_client.get_table(table_ref)
             self.logger.info(f"Using existing table: {self.table_ref}")
             return table
-            
+
         except GoogleCloudError:
-            # Table doesn't exist, create it
-            self.logger.info(f"Creating new table: {self.table_ref}")
-            
-            table = bigquery.Table(table_ref, schema=BNPL_RAW_SCHEMA)
-            
-            # Apply performance configurations
-            table.time_partitioning = TABLE_CONFIG["time_partitioning"]
-            table.clustering_fields = TABLE_CONFIG["clustering_fields"]
-            table.description = TABLE_CONFIG["description"]
-            
-            table = self.bq_client.create_table(table)
-            self.logger.info(f"Created table: {self.table_ref}")
-            return table
+            # Table doesn't exist - will be created by autodetect during load
+            self.logger.info(f"Table doesn't exist: {self.table_ref}")
+            self.logger.info(f"Will be created automatically by load job with autodetect")
+            return None
     
     def transform_records(self, raw_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Transform API response records for BigQuery ingestion using hybrid schema approach."""
-        ingestion_time = datetime.utcnow()
+        """Transform API response records for simplified JSON BigQuery ingestion."""
+        ingestion_time = datetime.utcnow().replace(tzinfo=timezone.utc)
         transformed_records = []
-        
+
         for raw_record in raw_records:
-            # Validate core required fields
-            required_fields = ['transaction_id', 'timestamp', 'customer_id', 'amount']
-            for field in required_fields:
-                if not raw_record.get(field):
-                    raise ValueError(f"Missing required field '{field}' in record: {raw_record.get('transaction_id', 'unknown')}")
-            
-            # Create hybrid record: Core fields + complete raw_data JSON
-            transformed = {
-                # REQUIRED core fields - business-critical
-                "transaction_id": raw_record["transaction_id"],
-                "customer_id": raw_record["customer_id"],  
-                "amount": raw_record["amount"],
-                "currency": raw_record.get("currency", "USD"),
-                
-                # Optional core fields for performance/ML
-                "product_id": raw_record.get("product_id"),
-                "status": raw_record.get("status"),
-                "risk_score": raw_record.get("risk_score"),
-                "risk_level": raw_record.get("risk_level"),
-                "will_default": raw_record.get("will_default"),
-                
-                # Metadata
-                "_record_id": raw_record.get("_record_id"),
-                "_generator": raw_record.get("_generator"),
-                "_ingestion_timestamp": ingestion_time.isoformat(),
-                
-                # Complete raw record - preserves ALL fields including dynamic ones
-                "raw_data": raw_record
-            }
-            
-            # Handle timestamps with proper parsing and validation
+            # Minimal validation - only check _timestamp
+            timestamp_field = raw_record.get('_timestamp')
+            if not timestamp_field:
+                raise ValueError(f"Missing required field '_timestamp' in record: {raw_record.get('transaction_id', 'unknown')}")
+
+            # Handle timestamp with proper parsing and validation
             try:
-                # Transaction timestamp - REQUIRED
-                parsed_time = datetime.fromisoformat(raw_record['timestamp'].replace('Z', '+00:00'))
-                transformed['timestamp'] = parsed_time.isoformat()
-            except (ValueError, TypeError, KeyError) as e:
-                raise ValueError(f"Invalid or missing timestamp in record {raw_record.get('transaction_id')}: {e}")
-            
-            try:
-                # Simtom's internal timestamp (for partitioning)
-                if '_timestamp' in raw_record:
-                    parsed_time = datetime.fromisoformat(raw_record['_timestamp'])
-                    transformed['_timestamp'] = parsed_time.isoformat()
+                # Add UTC timezone if missing (simtom sends naive timestamps)
+                if not timestamp_field.endswith('Z') and '+' not in timestamp_field:
+                    timestamp_field += '+00:00'  # Assume UTC
                 else:
-                    # Use transaction timestamp if _timestamp missing
-                    transformed['_timestamp'] = transformed['timestamp']
-            except (ValueError, TypeError):
-                self.logger.warning(f"Could not parse _timestamp: {raw_record.get('_timestamp')}, using transaction timestamp")
-                transformed['_timestamp'] = transformed['timestamp']
-                        
+                    timestamp_field = timestamp_field.replace('Z', '+00:00')
+
+                parsed_time = datetime.fromisoformat(timestamp_field)
+
+                # Create minimal 3-field record for JSON table
+                import json
+                transformed = {
+                    "_timestamp": parsed_time.isoformat(),
+                    "json_body": json.dumps(raw_record),  # ✅ Serialize to JSON string
+                    "_ingestion_timestamp": ingestion_time.isoformat(),
+                }
+
+            except (ValueError, TypeError, KeyError) as e:
+                raise ValueError(f"Invalid or missing _timestamp in record {raw_record.get('transaction_id')}: {e}")
+
             transformed_records.append(transformed)
-        
+
         return transformed_records
+
+    # OLD COMPLEX TRANSFORMATION - COMMENTED OUT FOR COMPARISON
+    # def transform_records_old(self, raw_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    #     """Transform API response records for BigQuery ingestion using hybrid schema approach."""
+    #     ingestion_time = datetime.utcnow().replace(tzinfo=timezone.utc)
+    #     transformed_records = []
+    #
+    #     for raw_record in raw_records:
+    #         # Validate core required fields
+    #         required_fields = ['transaction_id', '_timestamp', 'customer_id', 'amount']
+    #         for field in required_fields:
+    #             if not raw_record.get(field):
+    #                 raise ValueError(f"Missing required field '{field}' in record: {raw_record.get('transaction_id', 'unknown')}")
+    #
+    #         # Create hybrid record: Core fields + complete raw_data JSON
+    #         transformed = {
+    #             # REQUIRED core fields - business-critical
+    #             "transaction_id": raw_record["transaction_id"],
+    #             "customer_id": raw_record["customer_id"],
+    #             "amount": str(Decimal(str(raw_record["amount"]))),  # Convert to string for JSON serialization, BigQuery will interpret as NUMERIC
+    #             "currency": raw_record.get("currency", "USD"),
+    #
+    #             # Optional core fields for performance/ML
+    #             "product_id": raw_record.get("product_id"),
+    #             "status": raw_record.get("status"),
+    #             "risk_score": raw_record.get("risk_score"),
+    #             "risk_level": raw_record.get("risk_level"),
+    #             "will_default": raw_record.get("will_default"),
+    #
+    #             # Metadata
+    #             "_record_id": raw_record.get("_record_id"),
+    #             "_generator": raw_record.get("_generator"),
+    #             "_ingestion_timestamp": ingestion_time.isoformat(),
+    #
+    #             # Complete raw record - preserves ALL fields including dynamic ones
+    #             "raw_data": raw_record
+    #         }
+    #
+    #         # Handle timestamp with proper parsing and validation
+    #         try:
+    #             # Transaction timestamp from simtom API (_timestamp field)
+    #             timestamp_field = raw_record.get('_timestamp')
+    #             if not timestamp_field:
+    #                 raise ValueError("Missing required field '_timestamp'")
+    #
+    #             # Add UTC timezone if missing (simtom sends naive timestamps)
+    #             if not timestamp_field.endswith('Z') and '+' not in timestamp_field:
+    #                 timestamp_field += '+00:00'  # Assume UTC
+    #             else:
+    #                 timestamp_field = timestamp_field.replace('Z', '+00:00')
+    #
+    #             parsed_time = datetime.fromisoformat(timestamp_field)
+    #             transformed['_timestamp'] = parsed_time.isoformat()
+    #
+    #         except (ValueError, TypeError, KeyError) as e:
+    #             raise ValueError(f"Invalid or missing _timestamp in record {raw_record.get('transaction_id')}: {e}")
+    #
+    #         transformed_records.append(transformed)
+    #
+    #     return transformed_records
     
     def ingest_daily_batch(self, target_date: date) -> int:
         """Ingest data for a single day."""
@@ -253,57 +281,142 @@ class BNPLHistoricalIngester:
         successful_dates = []
         
         try:
-            # Collect data from all dates
-            for target_date in target_dates:
-                try:
-                    # Get data from simtom API for this date with realistic volumes
-                    raw_records = self.api_client.get_daily_batch(
-                        target_date=target_date,
-                        base_daily_volume=self.config.base_daily_volume,
-                        seed=self.config.seed
-                    )
-                    
-                    if not raw_records:
-                        self.logger.warning(f"No records returned for {target_date}")
-                        continue
-                    
-                    # Transform records
-                    transformed_records = self.transform_records(raw_records)
-                    all_records.extend(transformed_records)
-                    successful_dates.append(target_date)
-                    
-                    self.logger.info(f"Collected {len(raw_records)} records for {target_date}")
-                    
-                except Exception as e:
-                    self.logger.error(f"Failed to collect data for {target_date}: {e}")
-                    # Mark individual date as failed but continue with other dates
-                    self.progress_tracker.mark_date_failed(target_date)
-                    continue
+            # Make single API call for entire date range (performance optimization)
+            start_date_str = target_dates[0].strftime('%Y-%m-%d')
+            end_date_str = target_dates[-1].strftime('%Y-%m-%d')
+
+            self.logger.info(f"Fetching data for date range: {start_date_str} to {end_date_str}")
+
+            # Get data from simtom API for entire date range
+            raw_records = self.api_client.get_bnpl_data(
+                start_date=start_date_str,
+                end_date=end_date_str,
+                base_daily_volume=self.config.base_daily_volume,
+                seed=self.config.seed
+            )
+
+            if not raw_records:
+                raise Exception(f"No records returned for date range {start_date_str} to {end_date_str}")
+
+            # Early validation - check first few records before processing all
+            if len(raw_records) > 0:
+                sample_record = raw_records[0]
+                required_fields = ['transaction_id', 'customer_id', '_timestamp', 'amount']
+                missing_fields = [field for field in required_fields if field not in sample_record]
+                if missing_fields:
+                    raise ValueError(f"EARLY WARNING: Missing required fields in API response: {missing_fields}")
+                self.logger.info(f"✓ Early validation passed - required fields present")
+
+            # Transform records
+            self.logger.info(f"Transforming {len(raw_records)} records...")
+            transformed_records = self.transform_records(raw_records)
+            all_records.extend(transformed_records)
+            successful_dates = target_dates  # All dates successful if API call succeeds
+
+            self.logger.info(f"✓ Collected and transformed {len(raw_records)} records for {len(target_dates)} days")
             
             if not all_records:
                 raise Exception("No records collected from any dates in batch")
             
             # Single BigQuery load job for all records
-            table = self.bq_client.get_table(self.table_ref)
+            # Try to get table, but it's ok if it doesn't exist (autodetect will create it)
+            try:
+                table = self.bq_client.get_table(self.table_ref)
+            except:
+                table = self.table_ref  # Use table reference directly if table doesn't exist
             
             job_config = bigquery.LoadJobConfig(
                 source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
                 write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-                schema=BNPL_RAW_SCHEMA
+                autodetect=True  # ✅ Auto-detect schema like successful examples
+                # schema=BNPL_JSON_SCHEMA  # COMMENTED OUT - explicit schema was causing issues
             )
             
-            self.logger.info(f"Loading {len(all_records)} records to BigQuery in single job")
-            job = self.bq_client.load_table_from_json(
-                all_records, 
-                table,
-                job_config=job_config
-            )
-            
-            # Wait for job completion
-            job.result()
-            
+            self.logger.info(f"🚀 Starting BigQuery upload: {len(all_records)} records")
+            self.logger.info(f"🔧 Table reference: {table}")
+            self.logger.info(f"🔧 Job config: source_format={job_config.source_format}, write_disposition={job_config.write_disposition}")
+
+            # Debug: Log sample record WITH VALUES
+            if all_records:
+                sample = all_records[0]
+                self.logger.info(f"🔧 Sample record keys: {list(sample.keys())}")
+                self.logger.info(f"🔧 Sample _timestamp: '{sample.get('_timestamp')}'")
+                self.logger.info(f"🔧 Sample json_body type: {type(sample.get('json_body'))}")
+                self.logger.info(f"🔧 Sample json_body length: {len(sample.get('json_body', ''))}")
+                self.logger.info(f"🔧 Sample ingestion_timestamp: '{sample.get('_ingestion_timestamp')}'")
+
+                # Sample transaction data from json_body (now a JSON string)
+                import json
+                try:
+                    json_body = json.loads(sample.get('json_body', '{}'))
+                    self.logger.info(f"🔧 Transaction ID from json: '{json_body.get('transaction_id')}'")
+                    self.logger.info(f"🔧 Amount from json: {json_body.get('amount')}")
+                except:
+                    self.logger.info(f"🔧 JSON body preview: {sample.get('json_body', '')[:100]}...")
+
+            try:
+                job = self.bq_client.load_table_from_json(
+                    all_records,
+                    table,
+                    job_config=job_config
+                )
+                self.logger.info(f"✓ Job object created successfully")
+                self.logger.info(f"⏳ BigQuery job started: {job.job_id}")
+                self.logger.info(f"🔧 Job state: {job.state}")
+                self.logger.info(f"🔧 Job created: {job.created}")
+            except Exception as e:
+                self.logger.error(f"❌ Failed to create BigQuery job: {e}")
+                raise
+
+            # Wait for job completion with progress updates
+            import time
+            start_time = time.time()
+            while not job.done():
+                elapsed = time.time() - start_time
+                if elapsed > 10:  # Log progress every 10 seconds for long jobs
+                    self.logger.info(f"⏳ BigQuery job still running... ({elapsed:.1f}s elapsed)")
+                time.sleep(2)
+                job.reload()
+
+            # Final job result
+            job.result()  # This will raise exception if job failed
+
+            # Comprehensive job verification
+            elapsed = time.time() - start_time
+
             if job.errors:
-                raise Exception(f"BigQuery load job errors: {job.errors}")
+                raise Exception(f"❌ BigQuery load job errors: {job.errors}")
+
+            # Check if job actually processed data
+            if not hasattr(job, 'output_rows') or job.output_rows is None:
+                raise Exception(f"❌ Job object missing output_rows - job may not have been created properly")
+
+            if job.output_rows == 0:
+                raise Exception(f"❌ BigQuery job succeeded but inserted 0 rows! Expected: {len(all_records)}")
+
+            if job.output_rows != len(all_records):
+                self.logger.warning(f"⚠️ Row count mismatch: expected {len(all_records)}, inserted {job.output_rows}")
+
+            self.logger.info(f"✅ BigQuery upload completed in {elapsed:.1f}s - {job.output_rows} rows inserted")
+
+            # Quick verification - check if records were actually inserted
+            self.logger.info(f"🔍 Verifying upload to table: {self.table_ref}")
+            self.logger.info(f"🔍 Date range for verification: {start_date_str} to {end_date_str}")
+
+            query = f"SELECT COUNT(*) as row_count FROM `{self.table_ref}` WHERE DATE(_timestamp) = '{start_date_str}'"
+            self.logger.info(f"🔍 Verification query: {query}")
+
+            result = list(self.bq_client.query(query))[0]
+            actual_rows = result.row_count
+
+            self.logger.info(f"🔍 Query returned: {actual_rows} rows")
+
+            if actual_rows == 0:
+                raise Exception(f"❌ CRITICAL: No rows found in BigQuery after upload!")
+            elif actual_rows != len(all_records):
+                self.logger.warning(f"⚠️  Row count mismatch: uploaded {len(all_records)}, found {actual_rows} in table")
+            else:
+                self.logger.info(f"✅ Verification passed: {actual_rows} rows confirmed in BigQuery")
             
             # Mark all successful dates as completed
             total_records = len(all_records)
@@ -480,10 +593,10 @@ def main():
     
     # Configuration for realistic historical ingestion with speed optimization
     config = IngestionConfig(
-        start_date=date(2024, 1, 1),
-        end_date=date(2024, 12, 31),
-        base_daily_volume=5000,  # Average volume (varies realistically by day/season)
-        batch_days=30,  # Monthly batches for 10x speed improvement
+        start_date=date(2024, 9, 1),
+        end_date=date(2024, 9, 1),
+        base_daily_volume=4000,  # Average volume (varies realistically by day/season)
+        batch_days=1,  # 1-day batches for debugging
         seed=42,  # Reproducible realistic patterns
         parallel_workers=1  # Keep simple for now
     )
