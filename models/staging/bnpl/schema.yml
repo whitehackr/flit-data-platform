@@ -32,7 +32,7 @@ models:
           - unique
           - not_null
 
-      - name: original_transaction_id
+      - name: transaction_id
         description: "Original transaction ID from API (resets daily)"
         tests:
           - not_null

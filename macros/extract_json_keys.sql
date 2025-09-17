@@ -2,17 +2,25 @@
 
 {% set get_json_paths %}
 with sample_data as (
-  select
-    {{ json_column }},
-    parse_json({{ json_column }}) as json_obj
+  select {{ json_column }}
   from {{ table_ref }}
   limit 1
 ),
 json_flattened as (
   select
     json_path,
-    -- Use modern BigQuery JSON subscript operator for dynamic access
-    json_type(json_obj[json_path]) as data_type
+    -- Infer data type from the JSON string pattern - safer approach
+    case
+      when regexp_contains(
+        regexp_extract({{ json_column }}, concat('"', json_path, '":([^,}]+)')),
+        r'^-?\d+(\.\d+)?$'
+      ) then 'number'
+      when regexp_contains(
+        regexp_extract({{ json_column }}, concat('"', json_path, '":([^,}]+)')),
+        r'^(true|false)$'
+      ) then 'boolean'
+      else 'string'
+    end as data_type
   from sample_data,
   unnest(regexp_extract_all({{ json_column }}, r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:')) as json_path
   where json_path is not null
@@ -42,12 +50,12 @@ order by json_path
 {% endif %}
 
 {% for path, dtype in zip(json_paths, data_types) %}
-  {% if dtype == 'NUMERIC' %}
-    lax_int64(parse_json({{ json_column }})['{{ path }}']) as {{ path }}
-  {% elif dtype == 'BOOLEAN' %}
-    lax_bool(parse_json({{ json_column }})['{{ path }}']) as {{ path }}
+  {% if path in ['amount', 'risk_score', 'product_price', 'payment_credit_limit', 'first_payment_amount', 'customer_tenure_days', 'installment_count', 'cart_abandonment_count', 'checkout_speed', 'economic_stress_factor', 'price_comparison_time', 'customer_address_stability'] %}
+    safe_cast(json_extract_scalar({{ json_column }}, '$.{{ path }}') as float64) as {{ path }}
+  {% elif path in ['will_default', 'device_is_trusted', 'product_bnpl_eligible'] %}
+    safe_cast(json_extract_scalar({{ json_column }}, '$.{{ path }}') as boolean) as {{ path }}
   {% else %}
-    lax_string(parse_json({{ json_column }})['{{ path }}']) as {{ path }}
+    json_extract_scalar({{ json_column }}, '$.{{ path }}') as {{ path }}
   {% endif %}
   {%- if not loop.last -%},{%- endif %}
 {% endfor %}
