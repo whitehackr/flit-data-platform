@@ -591,12 +591,12 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Configuration for realistic historical ingestion with speed optimization
+    # Configuration for full historical ingestion with 10-day batches
     config = IngestionConfig(
         start_date=date(2024, 9, 1),
-        end_date=date(2024, 9, 1),
-        base_daily_volume=4000,  # Average volume (varies realistically by day/season)
-        batch_days=1,  # 1-day batches for debugging
+        end_date=date(2025, 8, 31),  # Full 365 days
+        base_daily_volume=5000,  # Average volume (varies realistically by day/season)
+        batch_days=10,  # 10-day batches for performance
         seed=42,  # Reproducible realistic patterns
         parallel_workers=1  # Keep simple for now
     )
