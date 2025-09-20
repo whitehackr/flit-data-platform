@@ -1,0 +1,112 @@
+version: 2
+
+sources:
+  - name: flit_bnpl_raw
+    description: "Raw BNPL transaction data from simtom API"
+    tables:
+      - name: raw_bnpl_txs_json
+        description: "Raw BNPL transactions in JSON format with autodetected schema"
+        columns:
+          - name: _timestamp
+            description: "Transaction timestamp for partitioning"
+            tests:
+              - not_null
+
+          - name: json_body
+            description: "Complete transaction JSON data as string"
+            tests:
+              - not_null
+
+          - name: _ingestion_timestamp
+            description: "Timestamp when record was ingested to BigQuery"
+            tests:
+              - not_null
+
+models:
+  - name: stg_bnpl_raw_transactions
+    description: "Staged BNPL transactions with unique IDs and extracted JSON fields"
+    columns:
+      - name: unique_transaction_id
+        description: "Unique transaction ID generated from composite key to fix daily reset issue"
+        tests:
+          - unique
+          - not_null
+
+      - name: transaction_id
+        description: "Original transaction ID from API (resets daily)"
+        tests:
+          - not_null
+
+      - name: customer_id
+        description: "Unique customer identifier"
+        tests:
+          - not_null
+
+      - name: product_id
+        description: "Product identifier"
+        tests:
+          - not_null
+
+      - name: amount
+        description: "Transaction amount"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: currency
+        description: "Currency code"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['USD']
+
+      - name: status
+        description: "Transaction status"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['completed', 'pending', 'failed', 'cancelled']
+
+      - name: risk_score
+        description: "ML risk score (0.0-1.0)"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0.0
+                max_value: 1.0
+
+      - name: risk_level
+        description: "Risk classification level"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['very_low', 'low', 'medium', 'high', 'very_high']
+
+      - name: will_default
+        description: "ML prediction for default risk"
+        tests:
+          - not_null
+
+      - name: payment_method_id
+        description: "Payment method identifier"
+        tests:
+          - not_null
+
+      - name: transaction_timestamp
+        description: "Transaction timestamp"
+        tests:
+          - not_null
+
+      - name: data_source
+        description: "Source of the data"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['bnpl_api']
