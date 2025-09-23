@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: int_bnpl_customer_tenure_adjusted
+    description: >
+      BNPL transactions with realistic customer tenure that grows over time.
+
+      Transforms static customer_tenure_days into dynamic tenure that increases
+      with each transaction, providing more realistic customer lifecycle data
+      for ML models.
+
+      Business Logic:
+      - Captures customer's tenure at first transaction as baseline
+      - Calculates days elapsed since first transaction
+      - Creates adjusted_customer_tenure = baseline + elapsed_days
+
+    columns:
+      - name: unique_transaction_id
+        description: "Unique transaction identifier (composite key)"
+        tests:
+          - unique
+          - not_null
+
+      - name: unique_customer_id
+        description: "Unique customer identifier based on demographics (age_bracket, credit_score_range, customer_id, income_bracket, state)"
+        tests:
+          - not_null
+
+      - name: customer_id
+        description: "Customer identifier"
+        tests:
+          - not_null
+
+      - name: transaction_timestamp
+        description: "Transaction timestamp"
+        tests:
+          - not_null
+
+      - name: first_customer_transaction_date
+        description: "Date of customer's very first transaction"
+        tests:
+          - not_null
+
+      - name: first_customer_tenure
+        description: "Customer tenure days at time of first transaction (baseline)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+
+      - name: days_from_first_transaction
+        description: "Days elapsed since customer's first transaction"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 365
+
+      - name: adjusted_customer_tenure
+        description: "Realistic customer tenure that grows over time (first_customer_tenure + days_from_first_transaction)"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10365
+
+      - name: customer_tenure_days
+        description: "Original static customer tenure from API (for comparison)"
+
+      - name: amount
+        description: "Transaction amount"
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+
+      - name: risk_score
+        description: "Risk score (0.0-1.0)"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+
+      - name: will_default
+        description: "Predicted default flag"
+        tests:
+          - accepted_values:
+              values: [true, false]
