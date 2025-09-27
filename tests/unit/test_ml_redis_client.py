@@ -37,7 +37,7 @@ class TestMLRedisClient:
 
     def test_cache_transaction(self, mock_redis_client):
         """Test caching transaction data"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
         transaction_data = sample_transaction_data()
 
         result = client.cache_transaction("tx_123456", transaction_data)
@@ -49,7 +49,7 @@ class TestMLRedisClient:
 
     def test_cache_prediction(self, mock_redis_client):
         """Test caching prediction data"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
         prediction_data = sample_prediction_data()
 
         result = client.cache_prediction("pred_abc123", prediction_data)
@@ -61,7 +61,7 @@ class TestMLRedisClient:
 
     def test_get_transaction(self, mock_redis_client):
         """Test retrieving transaction data"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
 
         result = client.get_transaction("tx_123456")
 
@@ -71,7 +71,7 @@ class TestMLRedisClient:
 
     def test_get_prediction(self, mock_redis_client):
         """Test retrieving prediction data"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
 
         result = client.get_prediction("pred_abc123")
 
@@ -81,7 +81,7 @@ class TestMLRedisClient:
 
     def test_health_check(self, mock_redis_client):
         """Test Redis health check"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
 
         result = client.health_check()
 
@@ -90,7 +90,7 @@ class TestMLRedisClient:
 
     def test_get_cache_stats(self, mock_redis_client):
         """Test cache statistics retrieval"""
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
 
         result = client.get_cache_stats()
 
@@ -102,9 +102,12 @@ class TestMLRedisClient:
     def test_connection_failure_handling(self):
         """Test handling of Redis connection failures"""
         with patch('redis_client.redis.from_url') as mock_redis:
-            mock_redis.side_effect = Exception("Connection failed")
+            # Mock successful client creation but failing operations
+            mock_instance = Mock()
+            mock_redis.return_value = mock_instance
+            mock_instance.select.side_effect = Exception("Connection failed")
 
-            client = MLRedisClient("invalid://url")
+            client = MLRedisClient()
             result = client.cache_transaction("tx_123", {"test": "data"})
 
             assert result is False
