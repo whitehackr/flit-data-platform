@@ -2,6 +2,18 @@
 
 Redis-based caching system for BNPL ML predictions with BigQuery batch upload pipeline.
 
+## Architecture & Design Decisions
+
+This implementation uses a hybrid caching approach for ML prediction persistence, balancing real-time response requirements with cost-effective batch processing to BigQuery.
+
+**For detailed architectural decisions, implementation insights, and design trade-offs, see [PR #14: Redis ML Caching Infrastructure](https://github.com/whitehackr/flit-data-platform/pull/14).**
+
+Key architectural choices:
+- **Hybrid caching pattern**: Redis cache → BigQuery batch uploads vs direct persistence
+- **Database separation**: Redis DB partitioning for operational isolation (transactions vs predictions)
+- **Network topology**: Private Railway networking for production, public endpoints for development
+- **Error handling**: Graceful degradation ensuring ML API availability during cache failures
+
 ## Architecture Overview
 
 ```
