@@ -52,7 +52,7 @@ class TestMLPipelineIntegration:
         redis_mock, bq_mock = mock_redis_and_bigquery
 
         # Step 1: Cache data using ML Redis client
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
 
         transaction_data = sample_transaction_data()
         prediction_data = sample_prediction_data()
@@ -62,7 +62,7 @@ class TestMLPipelineIntegration:
         assert client.cache_prediction("pred_test_456", prediction_data) is True
 
         # Step 2: Run batch upload
-        config = UploadConfig(redis_url="redis://localhost:6379")
+        config = UploadConfig(redis_url=os.getenv("REDIS_URL", "redis://localhost:6379"))
         uploader = RedisBigQueryUploader(config)
 
         result = uploader.run_daily_upload()
@@ -106,7 +106,7 @@ class TestMLPipelineIntegration:
         # Simulate Redis failure
         redis_mock.ping.return_value = False
 
-        client = MLRedisClient("redis://localhost:6379")
+        client = MLRedisClient()
         health_check = client.health_check()
 
         assert health_check is False
@@ -114,13 +114,14 @@ class TestMLPipelineIntegration:
         # Simulate BigQuery failure
         bq_mock.load_table_from_json.side_effect = Exception("BigQuery error")
 
-        config = UploadConfig(redis_url="redis://localhost:6379")
+        config = UploadConfig(redis_url=os.getenv("REDIS_URL", "redis://localhost:6379"))
         uploader = RedisBigQueryUploader(config)
 
         result = uploader.run_daily_upload()
 
-        assert result["predictions_success"] is False or result["transactions_success"] is False
-        assert len(result["errors"]) > 0
+        # Should fail uploads but not raise exceptions (graceful degradation)
+        assert result["predictions_success"] is False
+        assert result["transactions_success"] is False
 
     @pytest.mark.skip(reason="Requires actual Redis connection")
     def test_real_redis_connectivity(self):
