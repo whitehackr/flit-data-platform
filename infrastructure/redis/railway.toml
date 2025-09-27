@@ -1,0 +1,31 @@
+# Railway Redis Add-on Configuration
+# Deployment configuration for ML prediction caching
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "redis-server /app/infrastructure/redis/redis.conf"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Environment Variables for Redis
+[[deploy.environmentVariables]]
+name = "REDIS_URL"
+value = "${{REDIS_URL}}"
+
+[[deploy.environmentVariables]]
+name = "REDIS_PASSWORD"
+value = "${{REDIS_PASSWORD}}"
+
+# Resource allocation
+[deploy.resources]
+memory = "512Mi"
+cpu = "0.25"
+
+# Health checks
+[deploy.healthcheck]
+path = "/ping"
+port = 6379
+initialDelaySeconds = 10
+periodSeconds = 10
