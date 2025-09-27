@@ -20,6 +20,10 @@ from dataclasses import dataclass
 import redis
 from google.cloud import bigquery
 from google.cloud.exceptions import GoogleCloudError
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv('.env.redis')
 
 
 @dataclass
