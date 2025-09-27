@@ -12,8 +12,12 @@ from typing import Dict, Any, List
 import os
 
 from google.cloud import bigquery
-from .redis_client import MLRedisClient
-from .batch_upload import RedisBigQueryUploader, UploadConfig
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from redis_client import MLRedisClient
+from batch_upload import RedisBigQueryUploader, UploadConfig
 
 
 class MLInfrastructureMonitor:
