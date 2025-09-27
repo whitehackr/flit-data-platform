@@ -16,6 +16,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import redis
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env.redis
+load_dotenv('.env.redis')
 
 
 class MLRedisClient:
