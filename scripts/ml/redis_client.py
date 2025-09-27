@@ -163,55 +163,15 @@ class MLRedisClient:
             return False
 
 
-# Example usage for ML team
-def example_ml_api_integration():
-    """Example of how ML team would integrate Redis caching."""
-
-    # Initialize client
-    ml_cache = MLRedisClient()
-
-    # Example transaction data (from eCommerce app)
-    transaction_data = {
-        "transaction_id": "tx_123456",
-        "customer_id": "cust_789",
-        "amount": 299.99,
-        "transaction_timestamp": "2025-09-27T14:30:00Z",
-        "customer_credit_score_range": "good",
-        "customer_age_bracket": "25-34",
-        "device_type": "mobile",
-        "product_category": "electronics"
-    }
-
-    # Example prediction data (from ML API)
-    prediction_data = {
-        "prediction_id": "pred_abc123",
-        "transaction_id": "tx_123456",
-        "customer_id": "cust_789",
-        "model_predictions": {
-            "ridge": 0.234,
-            "logistic": 0.251,
-            "elastic": 0.240,
-            "ensemble": 0.242
-        },
-        "selected_model": "ridge",
-        "selected_prediction": 0.234,
-        "business_decision": "approve",
-        "risk_level": "LOW",
-        "processing_time_ms": 23.4
-    }
-
-    # Cache both records
-    ml_cache.cache_transaction("tx_123456", transaction_data)
-    ml_cache.cache_prediction("pred_abc123", prediction_data)
-
-    # Get cache stats for monitoring
-    stats = ml_cache.get_cache_stats()
-    print(f"Cache stats: {stats}")
-
-
 if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(level=logging.INFO)
 
-    # Run example
-    example_ml_api_integration()
+    # Simple health check when run directly
+    client = MLRedisClient()
+    if client.health_check():
+        print("✅ Redis connection successful")
+        stats = client.get_cache_stats()
+        print(f"Cache stats: {stats}")
+    else:
+        print("❌ Redis connection failed")
